@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="text-center">
+    <h1>{{ title }} eBook Generated</h1>
+    <p>
+        <a href="{{ url_for('download', filename=pdf_path) }}" class="btn btn-primary">Download PDF</a>
+        <a href="{{ url_for('download', filename=mp3_path) }}" class="btn btn-primary">Download Audiobook</a>
+    </p>
+</div>
+{% endblock %}
