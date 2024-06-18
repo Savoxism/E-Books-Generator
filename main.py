@@ -1,9 +1,4 @@
-import boto3
-from botocore.exceptions import BotoCoreError, ClientError
-from contextlib import closing
 import os
-import sys
-import subprocess
 from tempfile import gettempdir
 from pypdf import PdfReader
 from pydub import AudioSegment
@@ -12,16 +7,13 @@ import json
 from docx import Document
 from docx2pdf import convert
 import re
+from dotenv import load_dotenv
+from pathlib import Path
 
-# Constants
-OPENAI_API_KEY = "sk-proj-Ezla6uilyZOyEnYirrWyT3BlbkFJzrz8Sj17ul6tKR6XR7Au"
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 MODEL = "gpt-4o"
-POLLY_ACCESS_KEY = "AKIAW3MD75SA5HST7WFZ"
-POLLY_SECRET_KEY = "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"
-
-# Clients
 client = OpenAI(api_key=OPENAI_API_KEY)
-polly = boto3.client("polly", region_name="us-east-1", aws_access_key_id=POLLY_ACCESS_KEY, aws_secret_access_key=POLLY_SECRET_KEY)
 
 def create_chapters_for_title(title):
     response = client.chat.completions.create(
@@ -82,25 +74,15 @@ def create_audiobook_from_pdf(pdf_path, output_audio_path):
     audio_files = []
 
     for i, chunk in enumerate(chunks):
-        try:
-            response = polly.synthesize_speech(Text=chunk, OutputFormat="mp3", VoiceId="Kimberly") #Change the voice as desired
-        except (BotoCoreError, ClientError) as error:
-            print(error)
-            sys.exit(-1)
+        speech_file_path = Path(output_dir) / f"speech_{i}.mp3"
+        with client.audio.speech.with_streaming_response.create(
+            model="tts-1",
+            voice="onyx",
+            input=chunk,
+        ) as response:
+            response.stream_to_file(speech_file_path)
+        audio_files.append(speech_file_path)
 
-        if "AudioStream" in response:
-            with closing(response["AudioStream"]) as stream:
-                output_file = os.path.join(output_dir, f"speech_{i}.mp3")
-                try:
-                    with open(output_file, "wb") as file:
-                        file.write(stream.read())
-                    audio_files.append(output_file)
-                except IOError as error:
-                    print(error)
-                    sys.exit(-1)
-        else:
-            print("Could not stream audio")
-            sys.exit(-1)
 
     combined_audio = AudioSegment.empty()
     for file in audio_files:
@@ -145,7 +127,13 @@ def generate_ebook(title, base_dir):
     
     if os.path.exists(docx_path):
         os.remove(docx_path)
+        
+    chapters_json_path = "chapters.json"
+    if os.path.exists(chapters_json_path):
+        os.remove(chapters_json_path)
     
     print(f"Completed generating the eBook '{title}'. PDF saved at: {pdf_path}. Audiobook saved at: {audio_path}.")
     
-# generate_ebook("The Art of War", os.path.dirname(os.path.abspath(__file__)))
+    
+#Example Usage
+# generate_ebook("World War 2 Timeline", os.path.dirname(os.path.abspath(__file__)))
